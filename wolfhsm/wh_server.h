@@ -215,7 +215,7 @@ struct whServerContext_t {
     int                connected;
 #ifdef WOLFHSM_SHE_EXTENSION
 #endif
-    uint8_t padding[4];
+    uint8_t WH_PAD[4];
 };
 
 #define WH_COMMSERVER_INITIALIZER \
