@@ -51,9 +51,10 @@
 #include "wolfssl/wolfcrypt/error-crypt.h"
 #include "wolfssl/wolfcrypt/wc_port.h"
 #include "wolfssl/wolfcrypt/cryptocb.h"
+#include "wolfssl/wolfcrypt/aes.h"
+#include "wolfssl/wolfcrypt/cmac.h"
 #include "wolfssl/wolfcrypt/curve25519.h"
 #include "wolfssl/wolfcrypt/rsa.h"
-#include "wolfssl/wolfcrypt/ecc.h"
 #endif
 
 /* Client context */
@@ -524,6 +525,8 @@ int wh_Client_KeyEraseResponse(whClientContext* c);
  * @return int Returns 0 on success, or a negative error code on failure.
  */
 int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
+
+#ifdef HAVE_CURVE25519
 /**
  * @brief Associates a Curve25519 key with a specific key ID.
  *
@@ -536,7 +539,9 @@ int wh_Client_KeyErase(whClientContext* c, whNvmId keyId);
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId);
+#endif
 
+#ifndef NO_RSA
 /**
  * @brief Associates an RSA key with a specific key ID.
  *
@@ -549,7 +554,9 @@ int wh_Client_SetKeyCurve25519(curve25519_key* key, whNvmId keyId);
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
+#endif /* !NO_RSA */
 
+#ifndef NO_AES
 /**
  * @brief Associates an AES key with a specific key ID.
  *
@@ -563,6 +570,7 @@ int wh_Client_SetKeyRsa(RsaKey* key, whNvmId keyId);
  */
 int wh_Client_SetKeyAes(Aes* aes, whNvmId keyId);
 
+#ifdef WOLFSSL_CMAC
 /**
  * @brief Runs the AES CMAC operation in a single call with a wolfHSM keyId.
  *
@@ -615,6 +623,8 @@ int wh_Client_AesCmacVerify(Cmac* cmac, const byte* check, word32 checkSz,
  * @return int Returns 0 on success or a negative error code on failure.
  */
 int wh_Client_SetKeyCmac(Cmac* key, whNvmId keyId);
+#endif /* WOLFSSL_CMAC */
+#endif /* !NO_AES */
 #endif /* ! WOLFHSM_NO_CRYPTO */
 
 /* Counter functions */
