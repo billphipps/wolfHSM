@@ -14,6 +14,7 @@ WOLFSSL_DIR				?= ../../../../wolfssl
 WOLFHSM_DIR				?= ../../../
 WOLFHSM_PORT_DIR		?= $(WOLFHSM_DIR)/port/posix
 WOLFHSM_DEMO_CLIENT_DIR	?= $(WOLFHSM_DIR)/examples/demo/client
+WOLFHSM_DEMO_CUSTOMCB_DIR	?= $(WOLFHSM_DIR)/examples/demo/customcb
 
 # Output directory for build files
 BUILD_DIR				?= $(PROJECT_DIR)/Build
@@ -25,7 +26,8 @@ INC =   -I$(PROJECT_DIR) \
 		-I$(WOLFSSL_DIR) \
 		-I$(WOLFHSM_DIR) \
 		-I$(WOLFHSM_PORT_DIR) \
-		-I$(WOLFHSM_DEMO_CLIENT_DIR)
+		-I$(WOLFHSM_DEMO_CLIENT_DIR) \
+		-I$(WOLFHSM_DEMO_CUSTOMCB_DIR)
 
 # POSIX requires C source be defined before any header
 DEF += -D_POSIX_C_SOURCE=200809L
@@ -131,7 +133,7 @@ SRC_C +=  $(wildcard $(PROJECT_DIR)/*.c)
 
 # Demo client code
 SRC_C += $(wildcard $(WOLFHSM_DEMO_CLIENT_DIR)/*.c)
-
+SRC_C += $(wildcard $(WOLFHSM_DEMO_CUSTOMCB_DIR)/*.c)
 
 ## Automated processing below
 

@@ -173,6 +173,15 @@ int main(int argc, char** argv)
     (void)argc;
     (void)argv;
 
+/**** XXXX Added for testing */
+    extern int SHA256_KAT1_Run(void);
+
+    SHA256_KAT1_Run();
+
+
+
+/**** XXXX End of testing */
+
     memset(c_conf, 0, sizeof(whClientConfig));
     printf("Example wolfHSM POSIX client ");
 #ifndef WOLFHSM_CFG_NO_CRYPTO
