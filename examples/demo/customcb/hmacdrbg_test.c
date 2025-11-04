@@ -7,37 +7,808 @@
 #include "wolfssl/wolfcrypt/error-crypt.h"  /* For error codes */
 #include "wolfssl/wolfcrypt/hash.h"      /* For WC_HASH_TYPE */
 
+#include "wolfhsm/wh_utils.h"        /* For HexDump */
+
 #include "hmacdrbg.h"
 
-int SHA256_KAT1_Run(void);
+int SHA256_KAT_RunAll(void);
 
-int hmacdrbgtest_ApiTest()
+
+int hmacdrbgtest_ApiTest(void)
 {
     hmacdrbg_Context ctx[1] = {0};
 
     int ret = 0;
+    byte output[64] = {0};
 
     /* Negative test: Init with NULL context */
     ret = hmacdrbg_Init(NULL, WC_HASH_TYPE_SHA256, 0, NULL, INVALID_DEVID);
     if (ret != BAD_FUNC_ARG) {
+        printf("hmacdrbg_Init with NULL context did not return BAD_FUNC_ARG:%d\n", ret);
         return -1;
     }
+
+    hmacdrbg_Cleanup(ctx);
 
     /* Negative test: Init with invalid hash type */
     ret = hmacdrbg_Init(ctx, WC_HASH_TYPE_NONE, 0, NULL, INVALID_DEVID);
     if (ret != BAD_FUNC_ARG) {
+        printf("hmacdrbg_Init with invalid hash type did not return BAD_FUNC_ARG:%d\n", ret);
         return -1;
     }
+
+    /* Negative test: Instantiate before init */
+    ret = hmacdrbg_Instantiate( ctx, 
+        (const byte*)"entropy", 8, 
+        (const byte*)"nonce", 5,
+        (const byte*)"personalization", 15);
+    if (ret != RNG_FAILURE_E) {
+        printf("hmacdrbg_Instantiate before Init did not return RNG_FAILURE_E:%d\n", ret);
+        return -1;
+    }
+
+    /* Positive test: Init with 1 reseed */
+    ret = hmacdrbg_Init(ctx, WC_HASH_TYPE_SHA256, 1, NULL, INVALID_DEVID);
+    if (ret != 0) {
+        printf("hmacdrbg_Init with valid parameters failed:%d\n", ret);
+        return -1;
+    }
+    /* Negative test: Instantiate with NULL entropy input */
+    ret = hmacdrbg_Instantiate( ctx, 
+        NULL, 0, 
+        (const byte*)"nonce", 5,
+        (const byte*)"personalization", 15);
+    if (ret != BAD_FUNC_ARG) {
+        printf("hmacdrbg_Instantiate with NULL entropy did not return BAD_FUNC_ARG:%d\n", ret);
+        return -1;
+    }
+    /* Positive test: CheckInited after failed instantiate*/
+    ret = hmacdrbg_CheckInited(ctx);
+    if (ret != 0) {
+        printf("hmacdrbg_CheckInited after failed Instantiate 1 did not return 0:%d\n", ret);
+        return -1;
+    }
+
+    /* Negative test: Instantiate with NULL nonce input */
+    ret = hmacdrbg_Instantiate( ctx, 
+        (const byte*)"entropy", 8, 
+        NULL, 0,
+        (const byte*)"personalization", 15);
+    if (ret != BAD_FUNC_ARG) {
+        printf("hmacdrbg_Instantiate with NULL nonce did not return BAD_FUNC_ARG:%d\n", ret);
+        return -1;
+    }
+    /* Positive test: CheckInited after failed instantiate*/
+    ret = hmacdrbg_CheckInited(ctx);
+    if (ret != 0) {
+        printf("hmacdrbg_CheckInited after failed Instantiate 2 did not return 0:%d\n", ret);
+        return -1;
+    }
+
+    /* Negative test: Reseed before instantiate */
+    ret = hmacdrbg_Reseed(ctx, 
+        (const byte*)"entropy", 8, 
+        (const byte*)"additional", 10);
+    if (ret != RNG_FAILURE_E) {
+        printf("hmacdrbg_Reseed before Instantiate did not return RNG_FAILURE_E:%d\n", ret);
+        return -1;
+    }
+    /* Positive test: CheckInited after failed reseed*/
+    ret = hmacdrbg_CheckInited(ctx);
+    if (ret != 0) {
+        printf("hmacdrbg_CheckInited after failed reseed did not return 0:%d\n", ret);
+        return -1;
+    }
+
+    /* Negative test: Generate before instantiate */
+    ret = hmacdrbg_Generate(ctx, 
+        (const byte*)"additional", 10, 
+        output, 64);
+    if (ret != RNG_FAILURE_E) {
+        printf("hmacdrbg_Generate before Instantiate did not return RNG_FAILURE_E:%d\n", ret);
+        return -1;
+    }
+    /* Positive test: CheckInited after failed generate*/
+    ret = hmacdrbg_CheckInited(ctx);
+    if (ret != 0) {
+        printf("hmacdrbg_CheckInited after failed generate did not return 0:%d\n", ret);
+        return -1;
+    }
+
+    /* Negative test: CheckInstantiated before instantiate */
+    ret = hmacdrbg_CheckInstantiated(ctx);
+    if (ret != RNG_FAILURE_E) {
+        printf("hmacdrbg_CheckInstantiated before Instantiate did not return RNG_FAILURE_E:%d\n", ret);
+        return -1;
+    }
+
+    /* Positive test: Instantiate */
+    ret = hmacdrbg_Instantiate( ctx, 
+        (const byte*)"entropy", 8, 
+        (const byte*)"nonce", 5,
+        (const byte*)"personalization", 15);
+    if (ret != 0) {
+        printf("hmacdrbg_Instantiate with valid parameters failed:%d\n", ret);
+        return -1;
+    }
+
+    /* Positive test: CheckInstantiated after instantiate */
+    ret = hmacdrbg_CheckInstantiated(ctx);
+    if (ret != 0) {
+        printf("hmacdrbg_CheckInstantiated after Instantiate did not return 0:%d\n", ret);
+        return -1;
+    }
+
+    /* Negative test: Generate with NULL output buffer */
+    ret = hmacdrbg_Generate(ctx, 
+        (const byte*)"additional", 10, 
+        NULL, 64);
+    if (ret != BAD_FUNC_ARG) {
+        printf("hmacdrbg_Generate with NULL output did not return BAD_FUNC_ARG:%d\n", ret);
+        return -1;
+    }
+
+    /* Positive test: Generate1 */
+    ret = hmacdrbg_Generate(ctx, 
+        (const byte*)"additional", 10, 
+        output, sizeof(output));
+    if (ret != 0) {
+        printf("hmacdrbg_Generate with valid parameters failed:%d\n", ret);
+        return -1;
+    }
+
+    /* Negateive test: Generate with Reseed required */
+    ret = hmacdrbg_Generate(ctx, 
+        (const byte*)"additional", 10, 
+        output, sizeof(output));
+    if (ret != RAN_BLOCK_E) {
+        printf("hmacdrbg_Generate with Reseed required did not return RAN_BLOCK_E:%d\n", ret);
+        return -1;
+    }
+    /* Positive test: Reseed */
+    ret = hmacdrbg_Reseed(ctx, 
+        (const byte*)"entropy", 8, 
+        (const byte*)"additional", 10);
+    if (ret != 0) {
+        printf("hmacdrbg_Reseed with valid parameters failed:%d\n", ret);
+        return -1;
+    }
+    /* Positive test: Generate2 */
+    ret = hmacdrbg_Generate(ctx, 
+        (const byte*)"additional", 10, 
+        output, sizeof(output));
+    if (ret != 0) {
+        printf("hmacdrbg_Generate after reseed failed:%d\n", ret);
+        return -1;
+    }
+
+    hmacdrbg_Cleanup(ctx);
+    printf("hmacdrbg API Tests PASSED\n");
+    return 0;
+}
+
+int hmacdrbgtest_KatTest(void)
+{
+    int ret = SHA256_KAT_RunAll();
+    printf("HMACDRBG SHA256 KAT RunAll Test: %s\n", (ret == 0) ? "PASSED" : "FAILED");
+    return ret;
+}
+
+
+
+
+
+/** SHA256_KAT Input Data */
+
+/* Generate 512 bits = 64 bytes */
+#define SHA256_KAT_GenerateLen 64
+
+/* EntropyInput =
+000102 03040506
+0708090A 0B0C0D0E 0F101112 13141516 1718191A 1B1C1D1E
+1F202122 23242526 2728292A 2B2C2D2E 2F303132 33343536*/
+byte SHA256_KAT_Entropy0[] =
+{
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,
+    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
+    0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F,
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36
+};
+
+/* Nonce =
+20212223 24252627*/
+byte SHA256_KAT_Nonce[] =
+{
+    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27
+};
+
+/* personalization_str = 404142 43444546
+4748494A 4B4C4D4E 4F505152 53545556 5758595A 5B5C5D5E
+5F606162 63646566 6768696A 6B6C6D6E 6F707172 73747576*/
+byte SHA256_KAT_Personal[] =
+{
+    0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 
+    0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 
+    0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 
+    0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5D, 0x5E, 0x5F, 
+    0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 
+    0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F, 
+    0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76
+};
+
+/* AdditionalInput1 =
+606162 63646566
+6768696A 6B6C6D6E 6F707172 73747576 7778797A 7B7C7D7E
+7F808182 83848586 8788898A 8B8C8D8E 8F909192 93949596*/
+byte SHA256_KAT_AdditionalInput1[] =
+{
+    0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67,
+    0x68, 0x69, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F,
+    0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77,
+    0x78, 0x79, 0x7A, 0x7B, 0x7C, 0x7D, 0x7E, 0x7F,
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+    0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F,
+    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96
+};
+
+/* EntropyInput1 (for Reseed1) =
+808182 83848586
+8788898A 8B8C8D8E 8F909192 93949596 9798999A 9B9C9D9E
+9FA0A1A2 A3A4A5A6 A7A8A9AA ABACADAE AFB0B1B2 B3B4B5B6*/
+byte SHA256_KAT_Entropy1[] =
+{
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+    0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F,
+    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97,
+    0x98, 0x99, 0x9A, 0x9B, 0x9C, 0x9D, 0x9E, 0x9F,
+    0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
+    0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF,
+    0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6
+};
+
+/* AdditionalInput2 =
+A0A1A2 A3A4A5A6
+A7A8A9AA ABACADAE AFB0B1B2 B3B4B5B6 B7B8B9BA BBBCBDBE
+BFC0C1C2 C3C4C5C6 C7C8C9CA CBCCCDCE CFD0D1D2 D3D4D5D6*/
+byte SHA256_KAT_AdditionalInput2[] =
+{
+    0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
+    0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF,
+    0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7,
+    0xB8, 0xB9, 0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF,
+    0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7,
+    0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF,
+    0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6
+};
+
+/* EntropyInput2 (for Reseed2) =
+C0C1C2 C3C4C5C6
+C7C8C9CA CBCCCDCE CFD0D1D2 D3D4D5D6 D7D8D9DA DBDCDDDE
+DFE0E1E2 E3E4E5E6 E7E8E9EA EBECEDEE EFF0F1F2 F3F4F5F6*/
+byte SHA256_KAT_Entropy2[] =
+{
+    0xC0, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7,
+    0xC8, 0xC9, 0xCA, 0xCB, 0xCC, 0xCD, 0xCE, 0xCF,
+    0xD0, 0xD1, 0xD2, 0xD3, 0xD4, 0xD5, 0xD6, 0xD7,
+    0xD8, 0xD9, 0xDA, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF,
+    0xE0, 0xE1, 0xE2, 0xE3, 0xE4, 0xE5, 0xE6, 0xE7,
+    0xE8, 0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF,
+    0xF0, 0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6
+};
+
+
+/** SHA256 KAT Expected Output Data*/
+
+/* SHA256 KAT1 rnd_val1 is
+D67B8C17 34F46FA3 F763CF57 C6F9F4F2
+DC1089BD 8BC1F6F0 23950BFC 56176352 08C85012 38AD7A44
+00DEFEE4 6C640B61 AF77C2D1 A3BFAA90 EDE5D207 406E5403*/
+byte SHA256_KAT1_Expected1[] =
+{
+    0xD6, 0x7B, 0x8C, 0x17, 0x34, 0xF4, 0x6F, 0xA3,
+    0xF7, 0x63, 0xCF, 0x57, 0xC6, 0xF9, 0xF4, 0xF2,
+    0xDC, 0x10, 0x89, 0xBD, 0x8B, 0xC1, 0xF6, 0xF0,
+    0x23, 0x95, 0x0B, 0xFC, 0x56, 0x17, 0x63, 0x52,
+    0x08, 0xC8, 0x50, 0x12, 0x38, 0xAD, 0x7A, 0x44,
+    0x00, 0xDE, 0xFE, 0xE4, 0x6C, 0x64, 0x0B, 0x61,
+    0xAF, 0x77, 0xC2, 0xD1, 0xA3, 0xBF, 0xAA, 0x90,
+    0xED, 0xE5, 0xD2, 0x07, 0x40, 0x6E, 0x54, 0x03
+};
+
+/* SHA256 KAT1 rnd_val2 is
+8FDAEC20 F8B42140 7059E358 8920DA7E
+DA9DCE3C F8274DFA 1C59C108 C1D0AA9B 0FA38DA5 C792037C
+4D33CD07 0CA7CD0C 5608DBA8 B8856546 39DE2187 B74CB263*/
+byte SHA256_KAT1_Expected2[] =
+{
+    0x8F, 0xDA, 0xEC, 0x20, 0xF8, 0xB4, 0x21, 0x40,
+    0x70, 0x59, 0xE3, 0x58, 0x89, 0x20, 0xDA, 0x7E,
+    0xDA, 0x9D, 0xCE, 0x3C, 0xF8, 0x27, 0x4D, 0xFA,
+    0x1C, 0x59, 0xC1, 0x08, 0xC1, 0xD0, 0xAA, 0x9B,
+    0x0F, 0xA3, 0x8D, 0xA5, 0xC7, 0x92, 0x03, 0x7C,
+    0x4D, 0x33, 0xCD, 0x07, 0x0C, 0xA7, 0xCD, 0x0C,
+    0x56, 0x08, 0xDB, 0xA8, 0xB8, 0x85, 0x65, 0x46,
+    0x39, 0xDE, 0x21, 0x87, 0xB7, 0x4C, 0xB2, 0x63
+};
+
+/* SHA256 KAT2 rnd_val1 is 
+41878735 8135419B 93813353 5306176A
+FB251CDD 2BA37988 59B566A0 5CFB1D68 0EA92585 6D5B84D5
+6ADAE870 45A6BA28 D2C908AB 75B7CC41 431FAC59 F38918A3*/
+byte SHA256_KAT2_Expected1[] =
+{
+    0x41, 0x87, 0x87, 0x35, 0x81, 0x35, 0x41, 0x9B,
+    0x93, 0x81, 0x33, 0x53, 0x53, 0x06, 0x17, 0x6A,
+    0xFB, 0x25, 0x1C, 0xDD, 0x2B, 0xA3, 0x79, 0x88,
+    0x59, 0xB5, 0x66, 0xA0, 0x5C, 0xFB, 0x1D, 0x68,
+    0x0E, 0xA9, 0x25, 0x85, 0x6D, 0x5B, 0x84, 0xD5,
+    0x6A, 0xDA, 0xE8, 0x70, 0x45, 0xA6, 0xBA, 0x28,
+    0xD2, 0xC9, 0x08, 0xAB, 0x75, 0xB7, 0xCC, 0x41,
+    0x43, 0x1F, 0xAC, 0x59, 0xF3, 0x89, 0x18, 0xA3
+};
+
+/* SHA256 KAT2 rnd_val2 is
+7C067BDD CA817248 23D64C69 829285BD
+BFF53771 6102C188 2E202250 E0FA5EF3 A384CD34 A20FFD1F
+BC91E0C5 32A8A421 BC4AFE3C D47F2232 3EB4BAE1 A0078981*/
+byte SHA256_KAT2_Expected2[] =
+{
+    0x7C, 0x06, 0x7B, 0xDD, 0xCA, 0x81, 0x72, 0x48,
+    0x23, 0xD6, 0x4C, 0x69, 0x82, 0x92, 0x85, 0xBD,
+    0xBF, 0xF5, 0x37, 0x71, 0x61, 0x02, 0xC1, 0x88,
+    0x2E, 0x20, 0x22, 0x50, 0xE0, 0xFA, 0x5E, 0xF3,
+    0xA3, 0x84, 0xCD, 0x34, 0xA2, 0x0F, 0xFD, 0x1F,
+    0xBC, 0x91, 0xE0, 0xC5, 0x32, 0xA8, 0xA4, 0x21,
+    0xBC, 0x4A, 0xFE, 0x3C, 0xD4, 0x7F, 0x22, 0x32,
+    0x3E, 0xB4, 0xBA, 0xE1, 0xA0, 0x07, 0x89, 0x81
+};
+
+/* SHA256 KAT3 rnd_val1 is
+0DD9C855 89F357C3 89D6AF8D E9D734A9
+17C771EF 2D8816B9 82596ED1 2DB45D73 4A626808 35C02FDA
+66B08E1A 369AE218 F26D5210 AD564248 872D7A28 784159C3*/
+byte SHA256_KAT3_Expected1[] =
+{
+    0x0D, 0xD9, 0xC8, 0x55, 0x89, 0xF3, 0x57, 0xC3,
+    0x89, 0xD6, 0xAF, 0x8D, 0xE9, 0xD7, 0x34, 0xA9,
+    0x17, 0xC7, 0x71, 0xEF, 0x2D, 0x88, 0x16, 0xB9,
+    0x82, 0x59, 0x6E, 0xD1, 0x2D, 0xB4, 0x5D, 0x73,
+    0x4A, 0x62, 0x68, 0x08, 0x35, 0xC0, 0x2F, 0xDA,
+    0x66, 0xB0, 0x8E, 0x1A, 0x36, 0x9A, 0xE2, 0x18,
+    0xF2, 0x6D, 0x52, 0x10, 0xAD, 0x56, 0x42, 0x48,
+    0x87, 0x2D, 0x7A, 0x28, 0x78, 0x41, 0x59, 0xC3
+};
+
+/* SHA256 KAT3 rnd_val2 is
+46B4F475 6AE715E0 E51681AB 2932DE15
+23BE5D13 BAF0F458 8B11FE37 2FDA37AB E3683173 41BC8BA9
+1FC5D85B 7FB8CA8F BC309A75 8FD6FCA9 DF43C766 0B221322*/
+byte SHA256_KAT3_Expected2[] =
+{
+    0x46, 0xB4, 0xF4, 0x75, 0x6A, 0xE7, 0x15, 0xE0,
+    0xE5, 0x16, 0x81, 0xAB, 0x29, 0x32, 0xDE, 0x15,
+    0x23, 0xBE, 0x5D, 0x13, 0xBA, 0xF0, 0xF4, 0x58,
+    0x8B, 0x11, 0xFE, 0x37, 0x2F, 0xDA, 0x37, 0xAB,
+    0xE3, 0x68, 0x31, 0x73, 0x41, 0xBC, 0x8B, 0xA9,
+    0x1F, 0xC5, 0xD8, 0x5B, 0x7F, 0xB8, 0xCA, 0x8F,
+    0xBC, 0x30, 0x9A, 0x75, 0x8F, 0xD6, 0xFC, 0xA9,
+    0xDF, 0x43, 0xC7, 0x66, 0x0B, 0x22, 0x13, 0x22
+};
+
+/* SHA256 KAT4 rnd_val1 is
+1478F29E 94B02CB4 0D3AAB86 245557CE
+13A8CA2F DB657D98 EFC19234 6B9FAC33 EA58ADA2 CCA432CC
+DEFBCDAA 8B82F553 EF966134 E2CD139F 15F01CAD 568565A8*/
+byte SHA256_KAT4_Expected1[] =
+{
+    0x14, 0x78, 0xF2, 0x9E, 0x94, 0xB0, 0x2C, 0xB4,
+    0x0D, 0x3A, 0xAB, 0x86, 0x24, 0x55, 0x57, 0xCE,
+    0x13, 0xA8, 0xCA, 0x2F, 0xDB, 0x65, 0x7D, 0x98,
+    0xEF, 0xC1, 0x92, 0x34, 0x6B, 0x9F, 0xAC, 0x33,
+    0xEA, 0x58, 0xAD, 0xA2, 0xCC, 0xA4, 0x32, 0xCC,
+    0xDE, 0xFB, 0xCD, 0xAA, 0x8B, 0x82, 0xF5, 0x53,
+    0xEF, 0x96, 0x61, 0x34, 0xE2, 0xCD, 0x13, 0x9F,
+    0x15, 0xF0, 0x1C, 0xAD, 0x56, 0x85, 0x65, 0xA8
+};
+
+/* SHA256 KAT4 rnd_val2 is
+497C7A16 E88A6411 F8FCE10E F56763C6
+1025801D 8F51A743 52D682CC 23A0A8E6 73CAE032 28939064
+7DC683B7 342885D6 B76AB1DA 696D3E97 E22DFFDD FFFD8DF0*/
+byte SHA256_KAT4_Expected2[] =
+{
+    0x49, 0x7C, 0x7A, 0x16, 0xE8, 0x8A, 0x64, 0x11,
+    0xF8, 0xFC, 0xE1, 0x0E, 0xF5, 0x67, 0x63, 0xC6,
+    0x10, 0x25, 0x80, 0x1D, 0x8F, 0x51, 0xA7, 0x43,
+    0x52, 0xD6, 0x82, 0xCC, 0x23, 0xA0, 0xA8, 0xE6,
+    0x73, 0xCA, 0xE0, 0x32, 0x28, 0x93, 0x90, 0x64,
+    0x7D, 0xC6, 0x83, 0xB7, 0x34, 0x28, 0x85, 0xD6,
+    0xB7, 0x6A, 0xB1, 0xDA, 0x69, 0x6D, 0x3E, 0x97,
+    0xE2, 0x2D, 0xFF, 0xDD, 0xFF, 0xFD, 0x8D, 0xF0
+};
+
+/* SHA256 KAT5 rnd_val1 is
+FABD0AE2 5C69DC2E FDEFB7F2 0C5A31B5
+7AC938AB 771AA19B F8F5F146 8F665C93 8C9A1A5D F0628A56
+90F15A1A D8A613F3 1BBD65EE AD5457D5 D26947F2 9FE91AA7*/
+byte SHA256_KAT5_Expected1[] =
+{
+    0xFA, 0xBD, 0x0A, 0xE2, 0x5C, 0x69, 0xDC, 0x2E,
+    0xFD, 0xEF, 0xB7, 0xF2, 0x0C, 0x5A, 0x31, 0xB5,
+    0x7A, 0xC9, 0x38, 0xAB, 0x77, 0x1A, 0xA1, 0x9B,
+    0xF8, 0xF5, 0xF1, 0x46, 0x8F, 0x66, 0x5C, 0x93,
+    0x8C, 0x9A, 0x1A, 0x5D, 0xF0, 0x62, 0x8A, 0x56,
+    0x90, 0xF1, 0x5A, 0x1A, 0xD8, 0xA6, 0x13, 0xF3,
+    0x1B, 0xBD, 0x65, 0xEE, 0xAD, 0x54, 0x57, 0xD5,
+    0xD2, 0x69, 0x47, 0xF2, 0x9F, 0xE9, 0x1A, 0xA7
+};
+
+/* SHA256 KAT5 rnd_val2 is
+6BD925B0 E1C232EF D67CCD84 F722E927
+ECB46AB2 B7400147 77AF14BA 0BBF53A4 5BDBB62B 3F7D0B9C
+8EEAD057 C0EC754E F8B53E60 A1F434F0 5946A8B6 86AFBC7A*/
+byte SHA256_KAT5_Expected2[] =
+{
+    0x6B, 0xD9, 0x25, 0xB0, 0xE1, 0xC2, 0x32, 0xEF,
+    0xD6, 0x7C, 0xCD, 0x84, 0xF7, 0x22, 0xE9, 0x27,
+    0xEC, 0xB4, 0x6A, 0xB2, 0xB7, 0x40, 0x01, 0x47,
+    0x77, 0xAF, 0x14, 0xBA, 0x0B, 0xBF, 0x53, 0xA4,
+    0x5B, 0xDB, 0xB6, 0x2B, 0x3F, 0x7D, 0x0B, 0x9C,
+    0x8E, 0xEA, 0xD0, 0x57, 0xC0, 0xEC, 0x75, 0x4E,
+    0xF8, 0xB5, 0x3E, 0x60, 0xA1, 0xF4, 0x34, 0xF0,
+    0x59, 0x46, 0xA8, 0xB6, 0x86, 0xAF, 0xBC, 0x7A
+};
+
+/* SHA256 KAT6 rnd_val1 is
+085D57AF 6BABCF2B 9AEEF387 D531650E
+6A505C54 406AB37A 52899E0E CAB3632B 7A068A28 14C6DF6A
+E532B658 D0D9741C 84775FEE 45B684CD BDC25FBC B4D8F310*/
+byte SHA256_KAT6_Expected1[] =
+{
+    0x08, 0x5D, 0x57, 0xAF, 0x6B, 0xAB, 0xCF, 0x2B,
+    0x9A, 0xEE, 0xF3, 0x87, 0xD5, 0x31, 0x65, 0x0E,
+    0x6A, 0x50, 0x5C, 0x54, 0x40, 0x6A, 0xB3, 0x7A,
+    0x52, 0x89, 0x9E, 0x0E, 0xCA, 0xB3, 0x63, 0x2B,
+    0x7A, 0x06, 0x8A, 0x28, 0x14, 0xC6, 0xDF, 0x6A,
+    0xE5, 0x32, 0xB6, 0x58, 0xD0, 0xD9, 0x74, 0x1C,
+    0x84, 0x77, 0x5F, 0xEE, 0x45, 0xB6, 0x84, 0xCD,
+    0xBD, 0xC2, 0x5F, 0xBC, 0xB4, 0xD8, 0xF3, 0x10
+};
+
+/* SHA256 KAT6 rnd_val2 is
+9B219FD9 0DE2A08E 493405CF 874417B5
+826770F3 94481555 DC668ACD 96B9A3E5 6F9D2C32 5E26D47C
+1DFCFC8F BF86126F 40A1E639 60F62749 342ECDB7 1B240DC6*/
+byte SHA256_KAT6_Expected2[] =
+{
+    0x9B, 0x21, 0x9F, 0xD9, 0x0D, 0xE2, 0xA0, 0x8E,
+    0x49, 0x34, 0x05, 0xCF, 0x87, 0x44, 0x17, 0xB5,
+    0x82, 0x67, 0x70, 0xF3, 0x94, 0x48, 0x15, 0x55,
+    0xDC, 0x66, 0x8A, 0xCD, 0x96, 0xB9, 0xA3, 0xE5,
+    0x6F, 0x9D, 0x2C, 0x32, 0x5E, 0x26, 0xD4, 0x7C,
+    0x1D, 0xFC, 0xFC, 0x8F, 0xBF, 0x86, 0x12, 0x6F,
+    0x40, 0xA1, 0xE6, 0x39, 0x60, 0xF6, 0x27, 0x49,
+    0x34, 0x2E, 0xCD, 0xB7, 0x1B, 0x24, 0x0D, 0xC6
+};
+
+/* SHA256 KAT7 rnd_val1 is
+D8B67130 714194FF E5B2A35D BCD5E1A2
+9942AD5C 68F3DEB9 4ADD9E9E BAD86067 EDF04915 FB40C391
+EAE70C65 9EAAE7EF 11A3D46A 5B085EDD 90CC72CE A989210B*/
+byte SHA256_KAT7_Expected1[] =
+{
+    0xD8, 0xB6, 0x71, 0x30, 0x71, 0x41, 0x94, 0xFF,
+    0xE5, 0xB2, 0xA3, 0x5D, 0xBC, 0xD5, 0xE1, 0xA2,
+    0x99, 0x42, 0xAD, 0x5C, 0x68, 0xF3, 0xDE, 0xB9,
+    0x4A, 0xDD, 0x9E, 0x9E, 0xBA, 0xD8, 0x60, 0x67,
+    0xED, 0xF0, 0x49, 0x15, 0xFB, 0x40, 0xC3, 0x91,
+    0xEA, 0xE7, 0x0C, 0x65, 0x9E, 0xAA, 0xE7, 0xEF,
+    0x11, 0xA3, 0xD4, 0x6A, 0x5B, 0x08, 0x5E, 0xDD,
+    0x90, 0xCC, 0x72, 0xCE, 0xA9, 0x89, 0x21, 0x0B
+};
+
+/* SHA256 KAT7 rnd_val2 is
+8BBA71C2 583F2530 C259C907 84A59AC4
+4D1C8056 917CCF38 8788102D 73824C6C 11D5D63B E1F01017
+D884CD69 D9334B9E BC01E7BD 8FDF2A8E 52572293 DC21C0E1*/
+byte SHA256_KAT7_Expected2[] =
+{
+    0x8B, 0xBA, 0x71, 0xC2, 0x58, 0x3F, 0x25, 0x30,
+    0xC2, 0x59, 0xC9, 0x07, 0x84, 0xA5, 0x9A, 0xC4,
+    0x4D, 0x1C, 0x80, 0x56, 0x91, 0x7C, 0xCF, 0x38,
+    0x87, 0x88, 0x10, 0x2D, 0x73, 0x82, 0x4C, 0x6C,
+    0x11, 0xD5, 0xD6, 0x3B, 0xE1, 0xF0, 0x10, 0x17,
+    0xD8, 0x84, 0xCD, 0x69, 0xD9, 0x33, 0x4B, 0x9E,
+    0xBC, 0x01, 0xE7, 0xBD, 0x8F, 0xDF, 0x2A, 0x8E,
+    0x52, 0x57, 0x22, 0x93, 0xDC, 0x21, 0xC0, 0xE1
+};
+
+/* SHA256 KAT8 rnd_val1 is
+44D78BBC 3EB67C59 C22F6C31 003D212A
+7837CCD8 4C438B55 150FD013 A8A78FE8 EDEA81C6 72E4B8DD
+C8183886 E69C2E17 7DF574C1 F190DF27 1850F8CE 55EF20B8*/
+byte SHA256_KAT8_Expected1[] =
+{
+    0x44, 0xD7, 0x8B, 0xBC, 0x3E, 0xB6, 0x7C, 0x59,
+    0xC2, 0x2F, 0x6C, 0x31, 0x00, 0x3D, 0x21, 0x2A,
+    0x78, 0x37, 0xCC, 0xD8, 0x4C, 0x43, 0x8B, 0x55,
+    0x15, 0x0F, 0xD0, 0x13, 0xA8, 0xA7, 0x8F, 0xE8,
+    0xED, 0xEA, 0x81, 0xC6, 0x72, 0xE4, 0xB8, 0xDD,
+    0xC8, 0x18, 0x38, 0x86, 0xE6, 0x9C, 0x2E, 0x17,
+    0x7D, 0xF5, 0x74, 0xC1, 0xF1, 0x90, 0xDF, 0x27,
+    0x18, 0x50, 0xF8, 0xCE, 0x55, 0xEF, 0x20, 0xB8
+};
+
+/* SHA256 KAT8 rnd_val2 is
+917780DC 0CE9989F EE6C0806 D6DA123A
+18252947 58D4E1B5 82687231 780A2A9C 33F1D156 CCAD3277
+64B29A4C B2690177 AE96EF9E E92AD0C3 40BA0FD1 203C02C6*/
+byte SHA256_KAT8_Expected2[] =
+{
+    0x91, 0x77, 0x80, 0xDC, 0x0C, 0xE9, 0x98, 0x9F,
+    0xEE, 0x6C, 0x08, 0x06, 0xD6, 0xDA, 0x12, 0x3A,
+    0x18, 0x25, 0x29, 0x47, 0x58, 0xD4, 0xE1, 0xB5,
+    0x82, 0x68, 0x72, 0x31, 0x78, 0x0A, 0x2A, 0x9C,
+    0x33, 0xF1, 0xD1, 0x56, 0xCC, 0xAD, 0x32, 0x77,
+    0x64, 0xB2, 0x9A, 0x4C, 0xB2, 0x69, 0x01, 0x77,
+    0xAE, 0x96, 0xEF, 0x9E, 0xE9, 0x2A, 0xD0, 0xC3,
+    0x40, 0xBA, 0x0F, 0xD1, 0x20, 0x3C, 0x02, 0xC6
+};
+
+int SHA256_KAT_Run(int runNumber,
+    byte* entropy0, word32 entropy0Len,
+    byte* nonce, word32 nonceLen,
+    byte* personalization, word32 personalizationLen,
+    byte* entropy1, word32 entropy1Len,
+    byte* reseedaddl1, word32 reseedaddl1Len,
+    byte* genaddl1, word32 genaddl1Len,
+    byte* entropy2, word32 entropy2Len,
+    byte* reseedaddl2, word32 reseedaddl2Len,
+    byte* genaddl2, word32 genaddl2Len,
+    byte* expected1, word32 expected1Len,
+    byte* expected2, word32 expected2Len)
+{
+    int ret = 0;
+    hmacdrbg_Context ctx[1] = {{0}};
+    printf("SHA256_KAT_Run %d\n", runNumber);
+    ret = hmacdrbg_Init(ctx, WC_HASH_TYPE_SHA256, 10, NULL, INVALID_DEVID);
+    if (ret != 0) {
+        printf("SHA256_KAT%d Init failed: %d\n", runNumber, ret);
+        return ret;
+    }
+    ret = hmacdrbg_Instantiate(ctx,
+        entropy0, entropy0Len,
+        nonce, nonceLen,
+        personalization, personalizationLen);
+    if (ret != 0) {
+        printf("SHA256_KAT%d Instantiate failed: %d\n", runNumber, ret);
+        return ret;
+    }
+    if (entropy1 != NULL && entropy1Len > 0) {
+        ret = hmacdrbg_Reseed(ctx,
+            entropy1, entropy1Len,
+            reseedaddl1, reseedaddl1Len);
+        if (ret != 0) {
+            printf("SHA256_KAT%d Reseed1 failed: %d\n", runNumber, ret);
+            return ret;
+        }
+    }
+    byte output1[SHA256_KAT_GenerateLen] = {0};
+    ret = hmacdrbg_Generate(ctx,
+        genaddl1, genaddl1Len,
+        output1, sizeof(output1));
+    if (ret != 0) {
+        printf("SHA256_KAT%d Generate1 failed: %d\n", runNumber, ret);
+        return ret;
+    }
+    ret = XMEMCMP(output1, expected1, expected1Len);
+    if (ret != 0) {
+        printf("SHA256_KAT%d Generate1 comparison failed:\n", runNumber);
+        printf("SHA256_KAT%d Generate1:\n", runNumber);
+        wh_Utils_Hexdump("", output1, sizeof(output1));
+        printf("SHA256_KAT%d Expected1:\n", runNumber);
+        wh_Utils_Hexdump("", expected1, expected1Len);
+        return -1;
+    }
+    if (entropy2 != NULL && entropy2Len > 0) {
+        ret = hmacdrbg_Reseed(ctx,
+            entropy2, entropy2Len,
+            reseedaddl2, reseedaddl2Len);
+        if (ret != 0) {
+            printf("SHA256_KAT%d Reseed2 failed: %d\n", runNumber, ret);
+            return ret;
+        }
+    }
+    byte output2[SHA256_KAT_GenerateLen] = {0};
+    ret = hmacdrbg_Generate(ctx,
+        genaddl2, genaddl2Len,
+        output2, sizeof(output2));
+    if (ret != 0) {
+        printf("SHA256_KAT%d Generate2 failed: %d\n", runNumber, ret);
+        return ret;
+    }
+    ret = XMEMCMP(output2, expected2, expected2Len);
+    if (ret != 0) {
+        printf("SHA256_KAT%d Generate2 comparison failed:\n", runNumber);
+        printf("SHA256_KAT%d Generate2:\n", runNumber);
+        wh_Utils_Hexdump("", output2, sizeof(output2));
+        printf("SHA256_KAT%d Expected2:\n", runNumber);
+        wh_Utils_Hexdump("", expected2, expected2Len);
+        return -1;
+    }
+    hmacdrbg_Cleanup(ctx);
+    return 0;
+}
+
+/* SHA-256 KAT Runs
+                KAT1    KAT2    KAT3    KAT4    KAT5    KAT6    KAT7    KAT8
+    Entropy0    X       X       X       X       X       X       X       X
+       Nonce    X       X       X       X       X       X       X       X
+    Personal    -       -       X       X       -       -       X       X
+    Entropy1    -       -       -       -       X       X       X       X
+ ReseedAddl1    -       -       -       -       -       X       -       X
+    GenAddl1    -       X       -       X       -       -       -       -
+    Entropy2    -       -       -       -       X       X       X       X
+ ReseedAddl2    -       -       -       -       -       X       -       X
+    GenAddl2    -       X       -       X       -       -       -       -
+*/
+int SHA256_KAT_RunAll(void)
+{
+    int ret = 0;
+    ret = SHA256_KAT_Run(1,
+        SHA256_KAT_Entropy0, sizeof(SHA256_KAT_Entropy0),
+        SHA256_KAT_Nonce, sizeof(SHA256_KAT_Nonce),
+        NULL, 0,
+        NULL, 0,
+        NULL, 0,
+        NULL, 0,
+        NULL, 0,
+        NULL, 0,
+        NULL, 0,
+        SHA256_KAT1_Expected1, sizeof(SHA256_KAT1_Expected1),
+        SHA256_KAT1_Expected2, sizeof(SHA256_KAT1_Expected2));
+    if (ret != 0) {
+        printf("SHA256_KAT_RunAll SHA256_KAT1 failed: %d\n", ret);
+        return ret;
+    }
+    printf("SHA256_KAT_RunAll SHA256_KAT1 succeeded\n");
+
+    ret = SHA256_KAT_Run(2,
+        SHA256_KAT_Entropy0, sizeof(SHA256_KAT_Entropy0),
+        SHA256_KAT_Nonce, sizeof(SHA256_KAT_Nonce),
+        NULL, 0,
+        NULL, 0,
+        NULL, 0,
+        SHA256_KAT_AdditionalInput1, sizeof(SHA256_KAT_AdditionalInput1),
+        NULL, 0,
+        NULL, 0,
+        SHA256_KAT_AdditionalInput2, sizeof(SHA256_KAT_AdditionalInput2),
+        SHA256_KAT2_Expected1, sizeof(SHA256_KAT2_Expected1),
+        SHA256_KAT2_Expected2, sizeof(SHA256_KAT2_Expected2));
+    if (ret != 0) {
+        printf("SHA256_KAT_RunAll SHA256_KAT2 failed: %d\n", ret);
+        return ret;
+    }
+    printf("SHA256_KAT_RunAll SHA256_KAT2 succeeded\n");
+
+    ret = SHA256_KAT_Run(3,
+        SHA256_KAT_Entropy0, sizeof(SHA256_KAT_Entropy0),
+        SHA256_KAT_Nonce, sizeof(SHA256_KAT_Nonce),
+        SHA256_KAT_Personal, sizeof(SHA256_KAT_Personal),
+        NULL, 0,
+        NULL, 0,
+        NULL, 0,
+        NULL, 0,
+        NULL, 0,
+        NULL, 0,
+        SHA256_KAT3_Expected1, sizeof(SHA256_KAT3_Expected1),
+        SHA256_KAT3_Expected2, sizeof(SHA256_KAT3_Expected2));
+    if (ret != 0) {
+        printf("SHA256_KAT_RunAll SHA256_KAT3 failed: %d\n", ret);
+        return ret;
+    }
+    printf("SHA256_KAT_RunAll SHA256_KAT3 succeeded\n");
+
+    ret = SHA256_KAT_Run(4,
+        SHA256_KAT_Entropy0, sizeof(SHA256_KAT_Entropy0),
+        SHA256_KAT_Nonce, sizeof(SHA256_KAT_Nonce),
+        SHA256_KAT_Personal, sizeof(SHA256_KAT_Personal),
+        NULL, 0,
+        NULL, 0,
+        SHA256_KAT_AdditionalInput1, sizeof(SHA256_KAT_AdditionalInput1),
+        NULL, 0,
+        NULL, 0,
+        SHA256_KAT_AdditionalInput2, sizeof(SHA256_KAT_AdditionalInput2),
+        SHA256_KAT4_Expected1, sizeof(SHA256_KAT4_Expected1),
+        SHA256_KAT4_Expected2, sizeof(SHA256_KAT4_Expected2));
+    if (ret != 0) {
+        printf("SHA256_KAT_RunAll SHA256_KAT4 failed: %d\n", ret);
+        return ret;
+    }
+    printf("SHA256_KAT_RunAll SHA256_KAT4 succeeded\n");
+
+    ret = SHA256_KAT_Run(5,
+        SHA256_KAT_Entropy0, sizeof(SHA256_KAT_Entropy0),
+        SHA256_KAT_Nonce, sizeof(SHA256_KAT_Nonce),
+        NULL, 0,
+        SHA256_KAT_Entropy1, sizeof(SHA256_KAT_Entropy1),
+        NULL, 0,
+        NULL, 0,
+        SHA256_KAT_Entropy2, sizeof(SHA256_KAT_Entropy2),
+        NULL, 0,
+        NULL, 0,
+        SHA256_KAT5_Expected1, sizeof(SHA256_KAT5_Expected1),
+        SHA256_KAT5_Expected2, sizeof(SHA256_KAT5_Expected2));
+    if (ret != 0) {
+        printf("SHA256_KAT_RunAll SHA256_KAT5 failed: %d\n", ret);
+        return ret;
+    }
+    printf("SHA256_KAT_RunAll SHA256_KAT5 succeeded\n");
+
+    ret = SHA256_KAT_Run(6,
+        SHA256_KAT_Entropy0, sizeof(SHA256_KAT_Entropy0),
+        SHA256_KAT_Nonce, sizeof(SHA256_KAT_Nonce),
+        NULL, 0,
+        SHA256_KAT_Entropy1, sizeof(SHA256_KAT_Entropy1),
+        SHA256_KAT_AdditionalInput1, sizeof(SHA256_KAT_AdditionalInput1),
+        NULL, 0,
+        SHA256_KAT_Entropy2, sizeof(SHA256_KAT_Entropy2),
+        SHA256_KAT_AdditionalInput2, sizeof(SHA256_KAT_AdditionalInput2),
+        NULL, 0,
+        SHA256_KAT6_Expected1, sizeof(SHA256_KAT6_Expected1),
+        SHA256_KAT6_Expected2, sizeof(SHA256_KAT6_Expected2));
+    if (ret != 0) {
+        printf("SHA256_KAT_RunAll SHA256_KAT6 failed: %d\n", ret);
+        return ret;
+    }
+    printf("SHA256_KAT_RunAll SHA256_KAT6 succeeded\n");
+
+    ret = SHA256_KAT_Run(7,
+        SHA256_KAT_Entropy0, sizeof(SHA256_KAT_Entropy0),
+        SHA256_KAT_Nonce, sizeof(SHA256_KAT_Nonce),
+        SHA256_KAT_Personal, sizeof(SHA256_KAT_Personal),
+        SHA256_KAT_Entropy1, sizeof(SHA256_KAT_Entropy1),
+        NULL, 0,
+        NULL, 0,
+        SHA256_KAT_Entropy2, sizeof(SHA256_KAT_Entropy2),
+        NULL, 0,
+        NULL, 0,
+        SHA256_KAT7_Expected1, sizeof(SHA256_KAT7_Expected1),
+        SHA256_KAT7_Expected2, sizeof(SHA256_KAT7_Expected2));
+    if (ret != 0) {
+        printf("SHA256_KAT_RunAll SHA256_KAT7 failed: %d\n", ret);
+        return ret;
+    }
+    printf("SHA256_KAT_RunAll SHA256_KAT7 succeeded\n");
+
+    ret = SHA256_KAT_Run(8,
+        SHA256_KAT_Entropy0, sizeof(SHA256_KAT_Entropy0),
+        SHA256_KAT_Nonce, sizeof(SHA256_KAT_Nonce),
+        SHA256_KAT_Personal, sizeof(SHA256_KAT_Personal),
+        SHA256_KAT_Entropy1, sizeof(SHA256_KAT_Entropy1),
+        SHA256_KAT_AdditionalInput1, sizeof(SHA256_KAT_AdditionalInput1),
+        NULL, 0,
+        SHA256_KAT_Entropy2, sizeof(SHA256_KAT_Entropy2),
+        SHA256_KAT_AdditionalInput2, sizeof(SHA256_KAT_AdditionalInput2),
+        NULL, 0,
+        SHA256_KAT8_Expected1, sizeof(SHA256_KAT8_Expected1),
+        SHA256_KAT8_Expected2, sizeof(SHA256_KAT8_Expected2));
+    if (ret != 0) {
+        printf("SHA256_KAT_RunAll SHA256_KAT8 failed: %d\n", ret);
+        return ret;
+    }
+    printf("SHA256_KAT_RunAll SHA256_KAT8 succeeded\n");
 
     return 0;
 }
 
-int hmacdrbgtest_KatTest()
-{
-    return SHA256_KAT1_Run();
-}
 
-/* SHA-1 KAT Data */
+/** From https://csrc.nist.gov/CSRC/media/Projects/Cryptographic-Standards-and-Guidelines/documents/examples/HMAC_DRBG.pdf*/
+
+/* SHA-1 KAT */
 #if 0
 ##############################################################
 HMAC_DRBG
@@ -1916,7 +2687,7 @@ D1A9C1A2 2C84FC23 FF2227EF 98EC8BA9
 DF2A209B A1DB0980 9F57BFEA E5B3E5F1 46C75F2D 8DBB5E4A
 #endif
 
-/* SHA-224 KAT Data */
+/* SHA-224 KAT */
 #if 0
 ##############################################################
 HMAC_DRBG
@@ -4100,106 +4871,9 @@ rnd_val is
 CA66E306 F283E5F8 AAAB2087 B0B8A2E1 6DEDF4C3 C5EE8B71
 #endif
 
-/* SHA-256 KAT Data */
-
-
 /* SHA256_KAT1 */
-byte SHA256_KAT1_Inst_Entropy[] =
-{
-    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-    0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
-    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-    0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,
-    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
-    0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F,
-    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36
-};
-word32 SHA256_KAT1_Inst_EntropyLen = sizeof(SHA256_KAT1_Inst_Entropy);
-byte SHA256_KAT1_Nonce[] =
-{
-    0x20, 0x21, 0x22, 0x23,
-    0x24, 0x25, 0x26, 0x27
-};
-word32 SHA256_KAT1_NonceLen = sizeof(SHA256_KAT1_Nonce);
-byte* SHA256_KAT1_Personalization = NULL;
-word32 SHA256_KAT1_PersonalizationLen = 0;
-
-/* 512 bits */
-#define SHA256_KAT1_Generate1Len 64
-
-byte* SHA256_KAT1_Generate1AdditionalInput = NULL;
-word32 SHA256_KAT1_Generate1AdditionalInputLen = 0;
-
-byte SHA256_KAT1_Generate1RndVal[] =
-{
-    0xD6, 0x7B, 0x8C, 0x17, 0x34, 0xF4, 0x6F, 0xA3,
-    0xF7, 0x63, 0xCF, 0x57, 0xC6, 0xF9, 0xF4, 0xF2,
-    0xDC, 0x10, 0x89, 0xBD, 0x8B, 0xC1, 0xF6, 0xF0,
-    0x23, 0x95, 0x0B, 0xFC, 0x56, 0x17, 0x63, 0x52,
-    0x08, 0xC8, 0x50, 0x12, 0x38, 0xAD, 0x7A, 0x44,
-    0x00, 0xDE, 0xFE, 0xE4, 0x6C, 0x64, 0x0B, 0x61,
-    0xAF, 0x77, 0xC2, 0xD1, 0xA3, 0xBF, 0xAA, 0x90,
-    0xED, 0xE5, 0xD2, 0x07, 0x40, 0x6E, 0x54, 0x03
-};
-word32 SHA256_KAT1_Generate1RndValLen = sizeof(SHA256_KAT1_Generate1RndVal);
-
-byte* SHA256_KAT1_Generate2AdditionalInput = NULL;
-word32 SHA256_KAT1_Generate2AdditionalInputLen = 0;
-
-byte SHA256_KAT1_Generate2RndVal[] =
-{
-    0x8F, 0xDA, 0xEC, 0x20, 0xF8, 0xB4, 0x21, 0x40,
-    0x70, 0x59, 0xE3, 0x58, 0x89, 0x20, 0xDA, 0x7E,
-    0xDA, 0x9D, 0xCE, 0x3C, 0xF8, 0x27, 0x4D, 0xFA,
-    0x1C, 0x59, 0xC1, 0x08, 0xC1, 0xD0, 0xAA, 0x9B,
-    0x0F, 0xA3, 0x8D, 0xA5, 0xC7, 0x92, 0x03, 0x7C,
-    0x4D, 0x33, 0xCD, 0x07, 0x0C, 0xA7, 0xCD, 0x0C,
-    0x56, 0x08, 0xDB, 0xA8, 0xB8, 0x85, 0x65, 0x46,
-    0x39, 0xDE, 0x21, 0x87, 0xB7, 0x4C, 0xB2, 0x63
-};
-word32 SHA256_KAT1_Generate2RndValLen = sizeof(SHA256_KAT1_Generate2RndVal);
-
-int SHA256_KAT1_Run(void)
-{
-    int ret = 0;
-    hmacdrbg_Context ctx[1] = {{0}};
-
-    ret = hmacdrbg_Init(ctx, WC_HASH_TYPE_SHA256, 10, NULL, INVALID_DEVID);
-    if (ret != 0) {
-        printf("SHA256_KAT1 hmacdrbg_Init failed: %d\n", ret);
-        return ret;
-    }
-
-    ret = hmacdrbg_Instantiate(ctx,
-        SHA256_KAT1_Inst_Entropy, SHA256_KAT1_Inst_EntropyLen,
-        SHA256_KAT1_Nonce, SHA256_KAT1_NonceLen,
-        SHA256_KAT1_Personalization, SHA256_KAT1_PersonalizationLen);
-    if (ret != 0) {
-        printf("SHA256_KAT1 hmacdrbg_Instantiate failed: %d\n", ret);
-        return ret;
-    }
-
-    byte output[SHA256_KAT1_Generate1Len] = {0};
-    ret = hmacdrbg_Generate(ctx,
-        SHA256_KAT1_Generate1AdditionalInput, SHA256_KAT1_Generate1AdditionalInputLen,
-        output, sizeof(output));
-
-    if (ret != 0) {
-        printf("SHA256_KAT1 first hmacdrbg_Generate failed: %d\n", ret);
-        return ret;
-    }
-
-    ret = XMEMCMP(output, SHA256_KAT1_Generate1RndVal, SHA256_KAT1_Generate1RndValLen);
-    if (ret != 0) {
-        printf("SHA256_KAT1 first hmacdrbg_Generate comparison failed: %d\n", ret);
-        return -1;
-    }
-
-    return 0;
-}
-
 #if 0
-SHA256_KAT1
+
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 128
@@ -4369,8 +5043,8 @@ DA9DCE3C F8274DFA 1C59C108 C1D0AA9B 0FA38DA5 C792037C
 4D33CD07 0CA7CD0C 5608DBA8 B8856546 39DE2187 B74CB263
 #endif
 
+/* SHA256_KAT2 */
 #if 0
-SHA256_KAT2
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 128
@@ -4647,9 +5321,10 @@ rnd_val is
 7C067BDD CA817248 23D64C69 829285BD
 BFF53771 6102C188 2E202250 E0FA5EF3 A384CD34 A20FFD1F
 BC91E0C5 32A8A421 BC4AFE3C D47F2232 3EB4BAE1 A0078981
+#endif
 
-
-
+/* SHA256_KAT3 */
+#if 0
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 128
@@ -4833,9 +5508,10 @@ rnd_val is
 46B4F475 6AE715E0 E51681AB 2932DE15
 23BE5D13 BAF0F458 8B11FE37 2FDA37AB E3683173 41BC8BA9
 1FC5D85B 7FB8CA8F BC309A75 8FD6FCA9 DF43C766 0B221322
+#endif
 
-
-
+/* SHA256_KAT4 */
+#if 0
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 128
@@ -5128,9 +5804,10 @@ rnd_val is
 497C7A16 E88A6411 F8FCE10E F56763C6
 1025801D 8F51A743 52D682CC 23A0A8E6 73CAE032 28939064
 7DC683B7 342885D6 B76AB1DA 696D3E97 E22DFFDD FFFD8DF0
+#endif
 
-
-
+/* SHA256_KAT5 */
+#if 0
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 128
@@ -5416,9 +6093,10 @@ rnd_val is
 6BD925B0 E1C232EF D67CCD84 F722E927
 ECB46AB2 B7400147 77AF14BA 0BBF53A4 5BDBB62B 3F7D0B9C
 8EEAD057 C0EC754E F8B53E60 A1F434F0 5946A8B6 86AFBC7A
+#endif
 
-
-
+/* SHA256_KAT6 */
+#if 0
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 128
@@ -5739,9 +6417,10 @@ rnd_val is
 9B219FD9 0DE2A08E 493405CF 874417B5
 826770F3 94481555 DC668ACD 96B9A3E5 6F9D2C32 5E26D47C
 1DFCFC8F BF86126F 40A1E639 60F62749 342ECDB7 1B240DC6
+#endif
 
-
-
+/* SHA256_KAT7 */
+#if 0
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 128
@@ -6043,9 +6722,10 @@ rnd_val is
 8BBA71C2 583F2530 C259C907 84A59AC4
 4D1C8056 917CCF38 8788102D 73824C6C 11D5D63B E1F01017
 D884CD69 D9334B9E BC01E7BD 8FDF2A8E 52572293 DC21C0E1
+#endif
 
-
-
+/* SHA256_KAT8 */
+#if 0
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 128
@@ -6382,6 +7062,10 @@ rnd_val is
 917780DC 0CE9989F EE6C0806 D6DA123A
 18252947 58D4E1B5 82687231 780A2A9C 33F1D156 CCAD3277
 64B29A4C B2690177 AE96EF9E E92AD0C3 40BA0FD1 203C02C6
+#endif
+
+/* SHA-384 KAT*/
+#if 0
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 192
@@ -6579,6 +7263,9 @@ rnd_val is
 C6176752 7000351D D7D6910F 3AA375B7 70D38CF2 0270CBB1
 147AE249 F9DADB7A 5B4B6380 12C14ECA DCA32FBD DA8ED4BF
 73586EE5 DC9D543F 210437D4 866F7A2E FD326447 CAF4F68C
+
+
+
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 192
@@ -6923,6 +7610,9 @@ A8E2404D 14F6AE1F A9B66686 3D4C0265 2B806170 3F958798
 870032C9 D6D3CA10 302DC1C5 FE0F5B21 1F760EFB 4177684B
 A5056D84 B35B9FCC E4C44818 080346AD CC9AC610 E4719575
 B0D1713D DF30C671 99EA0A17 B1592E9B 75390462 D3059C35
+
+
+
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 192
@@ -7146,6 +7836,9 @@ B907E771 44FD55A5 4E9BA1A6 A0EED0AA C780020C 41A15DD8
 9A6C1638 30BA1D09 4E6A1710 0FF71EE3 0A96E1EE 04D2A966
 03832A4E 404F1966 C2B5F4CB 61B9927E 8D12AC1E 1A24CF23
 88C14E8E C96C3518 1EAEE32A AA46330D EAAFE5E7 CE783C74
+
+
+
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 192
@@ -7514,6 +8207,9 @@ BFFE3657 BE463125 BC247C54 B3A5B608 A7198008 78F5058A
 34ECAC69 2837F275 F0449FB1 5B04C2F1 2F12A189 87FF1E5B
 10370288 FF0074CA 6D99DD0B 5912AE3A B2875B18 201626E6
 1D2E3A0C FF95F45E 49B02FB8 CFBDE860 0B222872 82E01DF3
+
+
+
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 192
@@ -7852,6 +8548,9 @@ rnd_val is
 70A3F1B6 49986781 027DC908 210BAD0F 0E1DA470 A0450EFD
 0EC93DC0 06D24E95 BC6BA656 7AB36074 A29F2C93 B836FAF9
 62F80560 E44D759F F920BCFA 83EF4595 16F7196D 0885C522
+
+
+
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 192
@@ -8262,6 +8961,9 @@ rnd_val is
 CA912CE1 3BB20D88 9E880E65 71913D67 2498DE90 2B71CEDA
 5D644344 C63CD4D9 43CB6872 30867D60 F4712AEC 962EB77C
 CDB141F6 678C622A 65A0B2B3 E3DBD812 891EA5FC F09D2F19
+
+
+
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 192
@@ -8627,6 +9329,9 @@ rnd_val is
 6AEAA301 AF1AEF8A F0EAF22F BF34541E FFAB1431 666ACACC
 759338C7 E2867281 9D53CFEF 10A3E19D AFBD5329 5F1980A9
 F491504A 27255067 84B7AC82 6D92C838 A8668171 CAAA86E7
+
+
+
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 192
@@ -9063,6 +9768,10 @@ EFE5120A 69A85539 27016001 03492DFF 3D7F253E 83765107
 E2301DFA 51DCB14C 2F61DB1B 0030BF70 CCA6FB38 9BD34914
 8929CC00 CCC8CA6F B9138FD4 5BB0A9BA 136D0E2B 9CE54D63
 4BC4D139 B238A097 1883C693 B9958354 A2CAFAFE 3654958D
+#endif
+
+/* SHA-512 KAT*/
+#if 0
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 256
@@ -9290,6 +9999,9 @@ D724D216 62E45ABA 9AE200D9 41C4CF76 039808F2 9A800034
 6A6CC97D 44417737 A89F9047 2AC6088B 45C666C5 61686F19
 1745228F 11ED556A 519DA9AA 1646D15B 901382D8 7726D17D
 C5139FDE E1E8BDB0 F328D4B1 05865BD1 D815641E 6B1DBA23
+
+
+
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 256
@@ -9684,6 +10396,9 @@ D62DF426 ED92B3DA BD884880 A71405D7 D37217EB 0195FEC1
 0A86D8BB 4B5C59D4 8733D44B 4C9D831E B844329F A0B1C6B9
 56427905 30846F3A B4019E60 D6E7241C 17AA0710 9BBB6A8E
 D1E2B917 F7A7FA86 CCEA498F F18181E6 E1BED9F0 7B2F612F
+
+
+
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 256
@@ -9939,6 +10654,9 @@ rnd_val is
 4FC23AFB E982FE4B 4B007910 CC4874EE C2174054 21C8D8A1
 BA87EC68 4D0AF9A6 101D9DB7 87AE82C3 A6A25ED4 78DF1B12
 212CEC32 5466F3AC 7C48A561 66DD0B11 9C8673A1 A9D54F67
+
+
+
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 256
@@ -10361,6 +11079,9 @@ AB823C29 F2EBDEC3 EDE962F9 3D920A1D B59C84E1 E879C29F
 5F9995FC 3A6A3AF9 B587CA7C 13EA197D 423E81E1 D6469942
 B6E2CA83 A97E91F6 B298266A C148A180 9776C26A F5E239A5
 5A2BEB9E 752203A6 94E1F3FE 2B3E6A0C 9C314421 CDB55FBD
+
+
+
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 256
@@ -10749,6 +11470,9 @@ C0B1601A FE39338B
 6354A6F0 24967473 69375B9A 9D6B756F DC4A8FB3 08E08256
 9D79A85B B960F747 25662638 9A3B45B0 ABE7ECBC 39D5CD7B
 2C18DF2E 5FDE8C9B 8D43474C 54B6F983 94684459 29B438C7
+
+
+
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 256
@@ -11205,6 +11929,9 @@ rnd_val is
 24FE86BC E38AC226 9B4FDA6A BAA88403 9DF80A03 36A24D79
 1EB3067C 8F5F0CF0 F18DD73B 66A7B316 FB19E028 35CC6293
 65FCD1D3 BE640178 ED9093B9 1B36E1D6 8135F278 5BFF505C
+
+
+
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 256
@@ -11621,6 +12348,9 @@ B9D8E509 3ECE7B6B F48638D8 F704D134 ADDEB7F4 E9D5C142
 CD05683E 72B51648 6AF24AEC 15D61E81 E270DD4E BED91B62
 12EB8896 A6250D5C 8BC3A4A1 2F7E3068 FBDF856F 47EB23D3
 79F82C1E BCD1585F B260B9C0 C42625FB CEE68CAD 773CD5B1
+
+
+
 ##############################################################
 HMAC_DRBG
 Requested Security Strength = 256
@@ -12105,6 +12835,4 @@ BD1B5C19 6C57CF75 9BB9871B E0C163A5 7315EA96 F615136D
 064572F0 9F26D659 D24211F9 610FFCDF FDA8CE23 FFA96735
 75951826 60877766 035EED80 0B05364C E324A75E B63FD9B3
 EED956D1 47480B1D 0A42DF8A A990BB62 8666F6F6 1D60CBE2
-
-
 #endif

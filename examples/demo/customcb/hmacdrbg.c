@@ -173,7 +173,6 @@ V = hmac(K, V);
 if(data!=NULL)
     K = hmac(K, V || 0x01 || data);
     V = hmac(K, V);
-}
 */
 static int _update( hmacdrbg_Context *ctx, 
                     const byte* data1, word32 data1_len,

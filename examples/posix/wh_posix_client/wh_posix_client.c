@@ -174,11 +174,15 @@ int main(int argc, char** argv)
     (void)argv;
 
 /**** XXXX Added for testing */
-    extern int SHA256_KAT1_Run(void);
+    extern int hmacdrbgtest_KatTest(void);
+    extern int hmacdrbgtest_ApiTest(void);
 
-    SHA256_KAT1_Run();
+    int ret = hmacdrbgtest_KatTest();
+    printf("hmacdrbgtest_KatTest: %s\n", (ret == 0) ? "PASSED" : "FAILED");
+    ret= hmacdrbgtest_ApiTest();
+    printf("hmacdrbgtest_ApiTest: %s\n", (ret == 0) ? "PASSED" : "FAILED");
 
-
+    return 0;
 
 /**** XXXX End of testing */
 

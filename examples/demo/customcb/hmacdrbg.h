@@ -56,20 +56,6 @@ hmacdrbg_Cleanup(&ctx);
 #include "wolfssl/wolfcrypt/types.h"    /* For byte, word32 */  
 #include "wolfssl/wolfcrypt/hmac.h"     /* For WC_MAX_DIGEST_SIZE*/
 
-#define DCCB_HMACDRBG_GENERATE_ID 0
-
-typedef struct {
-    uint32_t size;
-} DccbHmacdrbg_GenerateRequest;
-
-typedef struct {
-    uint32_t size;
-    int32_t rc;
-    /* Data follows:
-        uint8_t response_data[size]; */
-} DccbHmacdrbg_GenerateResponse;
-
-
 
 /* Maximum size of the mac output, typically WC_MAX_DIGEST_SIZE */
 #ifndef HMACDRBG_CFG_OUTLEN
@@ -81,13 +67,13 @@ typedef struct {
 #define HMACDRBG_CFG_RESEED_INTERVAL 10000
 #endif
 
-/* Configuration for an HMAC DRBG Instance. */
+/* Configuration for an HMAC DRBG Context. */
 typedef struct {
     int hmac_type;              /* Like WC_SHA256 */
     word32 outlen;              /* From wc_HmacSizeByType */
     word32 reseed_interval;     /* Reseed interval */
     void* heap;                 /* Heap hint for HMAC */
-    int devid;                  /* Device ID for crypto cb for HMAC */
+    int devid;                  /* Device ID for cryptocb for HMAC */
 } hmacdrbg_Config;
 
 /* HMAC DRBG context. Note than any required HMAC instance is ephemeral */
@@ -101,6 +87,9 @@ typedef struct {
     byte v[HMACDRBG_CFG_OUTLEN];    /* Current state value */
 } hmacdrbg_Context;
 
+
+/** Public API */
+
 /* Configure context to use a specific type of HMAC (like WC_SHA256) 
 
 Returns:    0 successful configuration, 
@@ -110,7 +99,8 @@ int hmacdrbg_Init(  hmacdrbg_Context* ctx,
                     int hmac_type, word32 reseed_interval, 
                     void* heap, int devid);
 
-/* Clear the context removing any configuration and sensitive state */
+/* Clear the context removing any configuration and sensitive state.
+Context will be neither inited nor instantiated after Cleanup. */
 void hmacdrbg_Cleanup(hmacdrbg_Context* ctx);
 
 /* Helper function to check that context configuration is valid 
@@ -126,7 +116,7 @@ Returns:    0 if instantiated,
             BAD_FUNC_ARG on NULL context 
             RNG_FAILURE_E if not inited and instantiated
  */
-int _hmacdrbg_CheckInstantiated(const hmacdrbg_Context *ctx);
+int hmacdrbg_CheckInstantiated(const hmacdrbg_Context *ctx);
 
 
 /*
@@ -142,8 +132,8 @@ Returns:    0 on SUCCESS
             BAD_FUNC_ARG on invalid parameters
             RNG_FAILURE_E if not initialized
             OR other wolfCrypt error codes from internal HMAC calls
-Except for BAD_FUNC_ARG or RAN_BLOCK_E, hmacdrbg_Context is 
-Cleaned up (zeroized) on error.
+
+Note: hmacdrbg_Context is zeroized (Cleanup) on internal HMAC error.
 */
 int hmacdrbg_Instantiate(
     hmacdrbg_Context *ctx,  
@@ -163,8 +153,7 @@ Returns:    0 on SUCCESS
             RNG_FAILURE_E if not initialized, instantiated, or bad state
             OR other wolfCrypt error codes from internal HMAC calls
 
-Except for BAD_FUNC_ARG or RAN_BLOCK_E, hmacdrbg_Context is zeroized (Cleanup)
-on error.
+Note: hmacdrbg_Context is zeroized (Cleanup) on internal HMAC error.
 */
 int hmacdrbg_Reseed(
     hmacdrbg_Context *ctx, 
@@ -185,8 +174,7 @@ Returns:    0 on SUCCESS
             RNG_FAILURE_E if not initialized, instantiated, or bad state
             OR other wolfCrypt error codes from internal HMAC calls
 
-Except for BAD_FUNC_ARG or RAN_BLOCK_E, hmacdrbg_Context is zeroized (Cleanup)
-on error.
+Note: hmacdrbg_Context is zeroized (Cleanup) on internal HMAC error.
 */
 int hmacdrbg_Generate(
     hmacdrbg_Context *ctx, 
