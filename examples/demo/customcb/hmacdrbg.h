@@ -157,7 +157,7 @@ Note: hmacdrbg_Context is zeroized (Cleanup) on internal HMAC error.
 */
 int hmacdrbg_Reseed(
     hmacdrbg_Context *ctx, 
-    const byte* entropy, word32 entropy_len, 
+    const byte* entropy, word32 entropy_len,
     const byte* additional_input, word32 additional_input_len);
 
 /*
