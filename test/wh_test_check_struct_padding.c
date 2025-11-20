@@ -21,6 +21,11 @@
 
 #include "wolfhsm/wh_settings.h"
 
+/* Override the WOLFHSM_CFG_NO_CRYPTO setting for this test */
+#ifndef WOLFHSM_CFG_NO_CRYPTO
+#define WOLFHSM_CFG_NO_CRYPTO
+#endif
+
 /* For each included file, define an instance of every struct for which we want
  * to check padding. Then, when this file is compiled with -Wpadded it will
  * generate an error if padding is wrong */

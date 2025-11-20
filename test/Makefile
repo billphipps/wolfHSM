@@ -237,7 +237,7 @@ $(BUILD_DIR)/%.o: %.s
 	$(CMD_ECHO) $(AS) $(ASFLAGS) $(DEF) $(INC) -c -o $@ $<
 
 # Add additional flag here to avoid pragma
-$(BUILD_DIR)/wh_test_check_struct_padding.o: CFLAGS+=-Wpadded -DWOLFHSM_CFG_NO_CRYPTO
+$(BUILD_DIR)/wh_test_check_struct_padding.o: CFLAGS+=-Wpadded
 
 $(BUILD_DIR)/%.o: %.c
 	@echo "Compiling C file: $(notdir $<)"
