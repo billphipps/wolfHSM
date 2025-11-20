@@ -171,9 +171,9 @@ typedef struct whServerConfig_t {
 struct whServerContext_t {
     whNvmContext* nvm;
     whCommServer  comm[1];
+    whKeyCacheContext      localCache; /* Unified cache structure */
 #ifndef WOLFHSM_CFG_NO_CRYPTO
     whServerCryptoContext* crypto;
-    whKeyCacheContext      localCache; /* Unified cache structure */
 #ifdef WOLFHSM_CFG_SHE_EXTENSION
     whServerSheContext* she;
 #endif

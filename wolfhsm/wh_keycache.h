@@ -31,7 +31,7 @@
 #include "wolfhsm/wh_settings.h"
 #include "wolfhsm/wh_common.h"
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
+//#ifndef WOLFHSM_CFG_NO_CRYPTO
 
 /** Server cache slot structures */
 typedef struct whCacheSlot {
@@ -58,6 +58,6 @@ typedef struct whKeyCacheContext_t {
     whBigCacheSlot bigCache[WOLFHSM_CFG_SERVER_KEYCACHE_BIG_COUNT];
 } whKeyCacheContext;
 
-#endif /* !WOLFHSM_CFG_NO_CRYPTO */
+//#endif /* !WOLFHSM_CFG_NO_CRYPTO */
 
 #endif /* !WOLFHSM_WH_SERVER_CACHE_H_ */

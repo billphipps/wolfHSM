@@ -335,12 +335,12 @@ int wh_Server_HandleRequestMessage(whServerContext* server)
                                          &size, data);
             break;
 
-#ifndef WOLFHSM_CFG_NO_CRYPTO
         case WH_MESSAGE_GROUP_KEY:
             rc = wh_Server_HandleKeyRequest(server, magic, action, size, data,
                                             &size, data);
             break;
 
+#ifndef WOLFHSM_CFG_NO_CRYPTO
         case WH_MESSAGE_GROUP_CRYPTO:
             rc = wh_Server_HandleCryptoRequest(server, magic, action, seq, size,
                                                data, &size, data);
